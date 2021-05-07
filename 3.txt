@@ -1,0 +1,619 @@
+// Ayah Hamdan - 1180808 - section 3
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+//the node structure containing multiple data with different types and a pointer to the left and right elements and the height
+struct AVLnode
+{
+    char BookName[50] ;
+    char AuthorName[50] ;
+    int PublishingDate;
+    char PublisherAddress[50];
+    char Category[50];
+    struct AVLnode* Left;
+    struct AVLnode* Right;
+    int Height; //Balance information
+};
+
+// creating the functions prototypes
+struct AVLnode* fic=NULL, *nonFic=NULL;
+int count=0;
+struct AVLnode* temp=NULL;
+void FindAuthorName(char AN[], struct AVLnode* T);
+struct AVLnode* FindBookName(char BN[], struct AVLnode* T);
+struct AVLnode* FindMin( struct AVLnode* T );
+struct AVLnode* FindMax( struct AVLnode* T );
+int Height( struct AVLnode* P );
+int Max( int Lhs, int Rhs );
+struct AVLnode* SingleRotateWithLeft( struct AVLnode* K2 );
+struct AVLnode* SingleRotateWithRight( struct AVLnode* K1 );
+struct AVLnode* DoubleRotateWithLeft( struct AVLnode* K3 );
+struct AVLnode* DoubleRotateWithRight( struct AVLnode* K1 );
+struct AVLnode* Insert(char BN[],char AN[] ,int PD,char PA[],char C[], struct AVLnode* T );
+void PrintInOrder( struct AVLnode* t);
+void printPreOrder(struct AVLnode *t);
+char* ToLower(char s []);
+struct AVLnode* Delete(char BN[],struct AVLnode* T);
+void List(struct AVLnode* T);
+struct AVLnode* CreateTree();
+struct AVLnode* InsertNewBook( struct AVLnode* T );
+int IsBookExists(char BN[],struct AVLnode* T);
+void Update(char NewBN[],char BN[],char AN[] ,int PD,char PA[],char C[],struct AVLnode* T );
+struct AVLnode* UpdateFun(struct AVLnode* T );
+void WriteInFile(char BN[],char AN[] ,int PD,char PA[],char C[]);
+void FirstWrite(char BN[],char AN[] ,int PD,char PA[],char C[]);
+void StoreBooks(struct AVLnode* T);
+
+int main()
+{
+    struct AVLnode* tree=CreateTree();                        //creating the tree with the data from the text document
+    char an[50], bn[50];
+    int option;
+    printf(" ------Main Menu------\n");                        //printing the main menu with the options
+    printf("1: Insert a new book to the library\n");
+    printf("2: Search for a book using the name of the book\n");
+    printf("3: Search for a book using the name of the author\n");
+    printf("4: Delete a specific book\n");
+    printf("5: List books by category in lexicographic order of their names\n");
+    printf("6: Print the height of the tree\n");
+    printf("7: Update a book in the library\n");
+    printf("8: Exit\n");
+    do{
+        printf("Press the number for your option:\n");        //loop to do the options of the user from the menu. It stops only when entering number 7
+        scanf("%d",&option);
+        switch(option){
+            case 1: tree=InsertNewBook(tree);
+                    if(count==0)
+                       printf("Book has been entered to the library\n");
+                    count=0;
+                    break;
+            case 2: printf("Please enter name of the book to search for:\n");
+                    fflush(stdin);
+                    fgets(bn,50,stdin);
+                    strcpy(bn,strtok(bn,"\n"));
+                    printf("Searching for the book: %s:\n",bn);
+                    struct AVLnode* t=FindBookName(bn,tree);
+                    if(t==NULL)
+                        printf("The inserted book is not in the library!\n");
+                    else
+                        printf("The inserted book is in the library:\n%s\t%s\t%d\t%s\t%s\n",t->BookName,t->AuthorName,t->PublishingDate,t->PublisherAddress,t->Category);
+                    break;
+            case 3: count=0;
+                    printf("Please enter name of the author:\n");
+                    fflush(stdin);
+                    fgets(an,50,stdin);
+                    strcpy(an,strtok(an,"\n"));
+                    printf("Searching for books to the author:  %s:\n",an);
+                    FindAuthorName(an,tree);
+                    if(count==0)
+                        printf("The library does not have a book for the given author!\n");
+                    break;
+            case 4: printf("Please enter name of the book to delete:\n");
+                    fflush(stdin);
+                    fgets(bn,50,stdin);
+                    strcpy(bn,strtok(bn,"\n"));
+                    if(FindBookName(bn,tree)!= NULL){
+                        printf("Deleting the book: %s:\n",bn);
+                        tree=Delete(bn,tree);
+                        printf("%s book has been deleted\n",bn);
+                    }
+                    else
+                        printf("The given book is not in the library.\n");
+                    break;
+            case 5: fic=NULL;
+                    nonFic=NULL;
+                    List(tree);
+                    if(fic!=NULL){
+                          printf("Fiction books in the library in lexicographic order :\n");
+                          PrintInOrder(fic);
+                    }
+                    if(nonFic!=NULL){
+                          printf("Non-fiction books in the library in lexicographic order :\n");
+                          PrintInOrder(nonFic);
+                    }
+                      break;
+            case 6: printf("The height of the tree is: %d\n",Height(tree));
+                    break;
+            case 7: count=0;
+                    tree=UpdateFun(tree);
+                    if(count!=0)
+                        printf("Update operation is done\n");
+
+            case 8: break;
+            default: printf("***please enter only one of the given numbers!\n\n");      //to alert the user to only enter one of the numbers in the menu
+        }
+
+    }while(option!=8);
+
+    int exist=1;
+    count=0;
+    FILE *in;
+    in=fopen("books.txt","r");                                                     //opening the file with writing mode "w"
+    if(in==NULL)
+        exist==0;
+    fclose(in);
+    if(exist==1)
+        StoreBooks(tree);                                                           //to store the currently books back to the books file
+    else
+        printf("\t---File not found!\n\n");
+    return 0;
+}
+
+struct AVLnode* CreateTree(){                                                     //function to create the avl tree with the data from the text document
+    struct AVLnode* tree=NULL;
+    int a,i,pd,len=0;
+    char data[300],bn[50],an[50],pa[50],c[50];
+    FILE *in;                                                                         //pointer of type file; for communication between the file and the program
+    in=fopen("books.txt","r");                                                       //opening the file with reading mode "r"
+    if(in==NULL) {                                                                     //to let the user that reading the file was not successful and to not continue with creating the linked list
+        printf("\t---File not found!\n\n");
+        return NULL;
+    }
+    else{
+        do{                                                                           //to find how many lines in the file by counting the numbers of the new line character'\n'
+            a=getc(in);
+            if(a=='\n')
+            ++len;
+        }while(a!=EOF);
+        ++len;
+        fclose(in);
+        in=fopen("books.txt","r");                                             //reopening the file to read the data;because the first time the end of the file has been reached
+        for(i=0;i<len;++i){                                                     //to get the data from the file and save it in the data array
+            data[0]='\0';
+            fgets(data,300,in);
+            if(data[0] != '\0' &&data[0] != '\n'){
+            strcpy(data,strtok(data,"\n"));                                   //to split the new-line character from the read string
+            strcpy(bn,strtok(data,"|"));
+
+            strcpy(an,strtok(NULL,"|"));
+            pd=atoi(strtok(NULL,"|"));                                        //atoi is used for converting from string to integer
+            strcpy(pa,strtok(NULL,"|"));
+            strcpy(c,strtok(NULL,"|"));
+
+            tree=Insert(bn,an,pd,pa,c,tree);
+            }
+        }
+        fclose(in);
+    }
+    return tree;
+
+}
+
+void WriteInFile(char BN[],char AN[] ,int PD,char PA[],char C[]){
+    FILE *in;
+    in=fopen("books.txt","a");                                       //opening the file with writing mode "a" which will append the data to the end of the file
+    if(in==NULL)
+        printf("\t---File not found!\n\n");
+    else{
+          fprintf(in,"%s|%s|%d|%s|%s\n",BN,AN,PD,PA,C);
+        }
+    fclose(in);
+}
+
+void FirstWrite(char BN[],char AN[] ,int PD,char PA[],char C[]){      //function to only write the first string in the file
+    FILE *in;
+    in=fopen("books.txt","w");                                       //opening the file with writing mode "w"
+    if(in==NULL)
+        printf("\t---File not found!\n\n");
+    else{
+          fprintf(in,"%s|%s|%d|%s|%s\n",BN,AN,PD,PA,C);
+        }
+    fclose(in);
+}
+
+void StoreBooks(struct AVLnode* T){                             //function to store the books in the file
+    if(T==NULL)
+        return NULL;
+    else{
+        if(count==0){
+            FirstWrite(T->BookName,T->AuthorName,T->PublishingDate,T->PublisherAddress,T->Category);
+            ++count;
+        }
+        else
+            WriteInFile(T->BookName,T->AuthorName,T->PublishingDate,T->PublisherAddress,T->Category);
+        StoreBooks(T->Left );
+        StoreBooks(T->Right );
+    }
+}
+
+int IsBookExists(char BN[],struct AVLnode* T){                      //to check if the given book name exixtss in the library
+     if( T == NULL )
+        return 1;
+    else{
+        if(strcmp(ToLower(BN),ToLower(T->BookName)) <0 )
+             return IsBookExists( BN, T->Left );
+        else if(strcmp(ToLower(BN),ToLower(T->BookName)) >0 )
+             return IsBookExists( BN,T->Right );
+        else
+            return 0;
+    }
+}
+struct AVLnode* UpdateFun(struct AVLnode* T ){                                  //function to update a book in the library
+    if(T==NULL)
+        printf("Empty Library! Update is not available\n");
+    else{
+         char bn[50],newbn[50],an[50],pa[50],c[50],choice[50];
+         int pd,error=0;
+         printf("Please enter the name of the book you want to make an update to:\n");
+         fflush(stdin);                                                              //to clear the input buffer
+         fgets(bn,50,stdin);
+         strcpy(bn,strtok(bn,"\n"));
+         if(IsBookExists(bn,T)==0){
+         struct AVLnode* s= FindBookName(bn,T);
+         printf("If you want to change the name of the book. Please enter 1\n");
+         fflush(stdin);
+         fgets(choice,50,stdin);
+         strcpy(choice,strtok(choice,"\n"));
+         if(strcmp(choice,"1")==0){                                                //changing the book name only if the user entered 1
+             printf("Please enter the new name for book:\n");
+             fflush(stdin);
+             fgets(newbn,50,stdin);
+             strcpy(newbn,strtok(newbn,"\n"));
+         }
+         else
+            strcpy(newbn,s->BookName);
+         choice[0]='\0';
+         printf("If you want to change the name of the author for the book. Please enter 1\n");
+         fflush(stdin);
+         fgets(choice,50,stdin);
+         strcpy(choice,strtok(choice,"\n"));
+         if(strcmp(choice,"1")==0){
+            printf("Please enter name of the author:\n");
+            fflush(stdin);
+            fgets(an,50,stdin);
+            strcpy(an,strtok(an,"\n"));
+         }
+         else
+            strcpy(an,s->AuthorName);
+         choice[0]='\0';
+         printf("If you want to change the publishing date for the book. Please enter 1\n");
+         fflush(stdin);
+         fgets(choice,50,stdin);
+         strcpy(choice,strtok(choice,"\n"));
+         if(strcmp(choice,"1")==0){
+         do{                                                   // loop to repeat asking the user to enter the year if he entered negative number because its not correct for a year to be negative
+             if (error!=0)
+                 printf("wrong entry.\t");
+             printf("Please enter publishing date:\n");
+             scanf("%d",&pd);
+             ++error;
+         }while(pd<0);
+         }
+         else
+            pd=s->PublishingDate;
+         choice[0]='\0';
+         printf("If you want to change the publishing address for the book. Please enter 1\n");
+         fflush(stdin);
+         fgets(choice,50,stdin);
+         strcpy(choice,strtok(choice,"\n"));
+         if(strcmp(choice,"1")==0){
+         printf("Please enter publishing address:\n");
+         fflush(stdin);
+         fgets(pa,50,stdin);
+         strcpy(pa,strtok(pa,"\n"));
+         }
+         else
+            strcpy(pa,s->PublisherAddress);
+         choice[0]='\0';
+         printf("If you want to change the category for the book. Please enter 1\n");
+         fflush(stdin);
+         fgets(choice,50,stdin);
+         strcpy(choice,strtok(choice,"\n"));
+         if(strcmp(choice,"1")==0){
+         printf("Please enter the category for the book:\n");
+         fflush(stdin);
+         fgets(c,50,stdin);
+         strcpy(c,strtok(c,"\n"));
+         }
+         else
+            strcpy(c,s->Category);
+
+         Update(newbn,bn,an,pd,pa,c,T);
+         T=temp;
+         ++count;
+    }
+    else
+        printf("The book is not in the library! Update operation is not available.\n");
+    }
+    return T;
+}
+
+void Update(char NewBN[],char BN[],char AN[] ,int PD,char PA[],char C[],struct AVLnode* T ){     //function to change the data for the fields for the given book name
+    if(T==NULL)
+        return NULL;
+    else{
+    if(strcmp(ToLower(BN),ToLower(T->BookName)) ==0){
+        strcpy(T->BookName,NewBN);
+        strcpy(T->AuthorName,AN);
+        T->PublishingDate=PD;
+        strcpy(T->PublisherAddress,PA);
+        strcpy(T->Category,C);
+    }
+    temp=Insert(T->BookName,T->AuthorName,T->PublishingDate,T->PublisherAddress,T->Category,temp);
+    Update(NewBN,BN,AN,PD,PA,C, T->Left );
+    Update(NewBN,BN,AN,PD,PA,C, T->Right );
+    }
+}
+
+struct AVLnode* InsertNewBook( struct AVLnode* T ){                 //function to insert a new book and to ask the user the required information to insert the book
+    char bn[50],an[50],pa[50],c[50];
+    int pd,error=0;
+    printf("Please enter name of the book:\n");
+    fflush(stdin);
+    fgets(bn,50,stdin);
+    strcpy(bn,strtok(bn,"\n"));
+    printf("Please enter name of the author:\n");
+    fflush(stdin);
+    fgets(an,50,stdin);
+    strcpy(an,strtok(an,"\n"));
+    do{
+        if (error!=0)
+            printf("wrong entry.\t");
+        printf("Please enter publishing date:\n");
+        scanf("%d",&pd);
+        ++error;
+    }while(pd<0);
+    printf("Please enter publishing address:\n");
+    fflush(stdin);
+    fgets(pa,50,stdin);
+    strcpy(pa,strtok(pa,"\n"));
+    printf("Please enter the category for the book:\n");
+    fflush(stdin);
+    fgets(c,50,stdin);
+    strcpy(c,strtok(c,"\n"));
+    if(IsBookExists(bn,T)==1)                                   //if the book is already in the library then it will not be added again
+       T=Insert(bn,an,pd,pa,c,T);
+    else{
+        printf("The book is already in the library\n");
+        ++count;
+    }
+    return T;
+}
+
+void FindAuthorName(char AN[], struct AVLnode* T){                          //function to find to find a book using the author name
+    struct AVLnode* temp=NULL;
+    if( T == NULL )
+        printf("The library is empty\n");
+    else{
+            if(strcmp(ToLower(AN),ToLower(T->AuthorName)) ==0){
+                if(count==0)                                               //count is used to print the sentence on time
+                     printf("The library has the following books for the given author:\n");
+                printf("%s\t%s\t%d\t%s\t%s\n",T->BookName,T->AuthorName,T->PublishingDate,T->PublisherAddress,T->Category);
+                ++count;
+            }
+            if(T->Left!=NULL)
+                FindAuthorName( AN, T->Left );
+            if(T->Right!=NULL)
+                FindAuthorName( AN, T->Right );
+    }
+}
+
+struct AVLnode* FindBookName(char BN[], struct AVLnode* T ){                       //function to find to find a book using the book name
+    if( T == NULL )
+        return NULL;
+    else{
+        if(strcmp(ToLower(BN),ToLower(T->BookName)) <0 )
+             return FindBookName( BN, T->Left );
+        else if(strcmp(ToLower(BN),ToLower(T->BookName)) >0 )
+             return FindBookName( BN, T->Right );
+        else
+            return T;
+    }
+}
+
+struct AVLnode* FindMin( struct AVLnode* T ){             //to find the minimum node
+    if( T == NULL )
+        return NULL;
+    else if( T->Left == NULL )
+        return T;
+    else
+        return FindMin( T->Left );
+}
+
+struct AVLnode* FindMax( struct AVLnode* T ){                  //to find the maximum node
+    if( T != NULL )
+        while( T->Right != NULL )
+            T = T->Right;
+
+    return T;
+}
+
+int Height( struct AVLnode* P ){
+    if( P == NULL )
+        return -1;
+    else
+        return P->Height;
+}
+
+int Max( int Lhs, int Rhs ){
+    return Lhs > Rhs ? Lhs : Rhs;
+}
+
+struct AVLnode* SingleRotateWithLeft( struct AVLnode* K2 ){                     //to rotate to the left one time
+    struct AVLnode*  K1;
+
+    K1 = K2->Left;
+    K2->Left = K1->Right;
+    K1->Right = K2;
+
+    K2->Height = Max( Height( K2->Left ), Height( K2->Right ) ) + 1;
+    K1->Height = Max( Height( K1->Left ), K2->Height ) + 1;
+
+    return K1;
+}
+
+struct AVLnode* SingleRotateWithRight( struct AVLnode* K1 ){                      //to rotate to the right one time
+    struct AVLnode* K2;
+
+    K2 = K1->Right;
+    K1->Right = K2->Left;
+    K2->Left = K1;
+
+    K1->Height = Max( Height( K1->Left ), Height( K1->Right ) ) + 1;
+    K2->Height = Max( Height( K2->Right ), K1->Height ) + 1;
+
+    return K2;
+}
+
+struct AVLnode* DoubleRotateWithLeft( struct AVLnode* K3 ){                        //right left rotation
+    struct AVLnode*  K1;
+    /* Rotate between K1 and K2 */
+    K3->Left = SingleRotateWithRight( K3->Left );
+
+    /* Rotate between K3 and K2 */
+    return SingleRotateWithLeft( K3 );
+}
+
+struct AVLnode* DoubleRotateWithRight( struct AVLnode* K1 ){                    //left right rotation
+    /* Rotate between K3 and K2 */
+    K1->Right = SingleRotateWithLeft( K1->Right );
+
+    /* Rotate between K1 and K2 */
+    return SingleRotateWithRight( K1 );
+}
+
+struct AVLnode* Insert(char BN[],char AN[] ,int PD,char PA[],char C[],struct AVLnode* T ){
+    if( T == NULL )
+    {
+        /* Create and return a one-node tree */
+        T = malloc( sizeof( struct AVLnode ) );
+        if( T == NULL )
+            printf( "Out of space!!!" );
+        else
+        {
+            strcpy(T->BookName,BN);
+            strcpy(T->AuthorName,AN);
+            T->PublishingDate=PD;
+            strcpy(T->PublisherAddress,PA);
+            strcpy(T->Category,C);
+            T->Height = 0;
+            T->Left = T->Right = NULL;
+        }
+    }
+    else if(strcmp(ToLower(BN),ToLower(T->BookName))<0){
+        T->Left = Insert(BN,AN,PD,PA,C,T->Left );
+        if( Height( T->Left ) - Height( T->Right ) == 2 )
+            if(strcmp(ToLower(BN),ToLower(T->Left->BookName))<0)
+                T = SingleRotateWithLeft( T );
+            else
+                T = DoubleRotateWithLeft( T );
+    }
+    else if(strcmp(ToLower(BN),ToLower(T->BookName))>0){
+        T->Right = Insert(BN,AN,PD,PA,C,T->Right );
+        if( Height( T->Right ) - Height( T->Left ) == 2 )
+            if(strcmp(ToLower(BN),ToLower(T->Right->BookName))>0)
+                T = SingleRotateWithRight( T );
+            else
+                T = DoubleRotateWithRight( T );
+    }
+    /* Else X is in the tree already; we'll do nothing */
+
+    T->Height = Max( Height( T->Left ), Height( T->Right ) ) + 1;
+    return T;
+}
+
+struct AVLnode* Delete( char BN[],struct AVLnode* T){                 //to delete a book using the book name
+    if (T == NULL)
+        return T;
+    if (strcmp(ToLower(BN),ToLower(T->BookName))<0 )
+        T->Left = Delete(BN,T->Left);
+    else if(strcmp(ToLower(BN),ToLower(T->BookName))>0 )
+        T->Right = Delete(BN,T->Right);
+    else{
+        if( (T->Left == NULL) || (T->Right == NULL) ){               //case for zero children or one child
+            struct AVLnode *temp = T->Left ? T->Left : T->Right;
+            if (temp == NULL){
+                temp = T;
+                T = NULL;
+            }
+            else
+                *T = *temp;
+            free(temp);
+        }
+        else{                                                       //case for two children
+            struct AVLnode* temp = FindMin(T->Right);
+            strcpy(T->BookName,temp->BookName);
+            strcpy(T->AuthorName,temp->AuthorName);
+            T->PublishingDate=temp->PublishingDate;
+            strcpy(T->PublisherAddress,temp->PublisherAddress);
+            strcpy(T->Category,temp->Category);
+            T->Right = Delete(temp->BookName,T->Right);
+        }
+    }
+
+    if (T == NULL)
+        return T;
+
+    T->Height = Max( Height( T->Left ), Height( T->Right ) ) + 1;
+    if( Height( T->Left ) - Height( T->Right ) == 2 )
+            if(Height( T->Left ->Left ) - Height( T->Left ->Right ) == 1)
+                T = SingleRotateWithLeft( T );
+            else
+                T = DoubleRotateWithLeft( T );
+
+    else if( Height( T->Right ) - Height( T->Left ) == 2 )
+            if(Height( T->Right->Right ) - Height( T->Right->Left ) == 1)
+                T = SingleRotateWithRight( T );
+            else
+                T = DoubleRotateWithRight( T );
+
+    return T;
+}
+
+void List(struct AVLnode* T){                                           //to print the books by category in lexicographic order of their names
+     if( T == NULL )
+        printf("empty library\n");
+    else{
+            if(strcmp(ToLower("Fiction"),ToLower(T->Category)) ==0){
+                fic= Insert(T->BookName,T->AuthorName,T->PublishingDate,T->PublisherAddress,T->Category,fic);
+            }
+            else{
+                nonFic=Insert(T->BookName,T->AuthorName,T->PublishingDate,T->PublisherAddress,T->Category,nonFic);
+            }
+            if(T->Left!=NULL)
+                List( T->Left );
+            if(T->Right!=NULL)
+                List(T->Right);
+
+    }
+
+}
+
+char* ToLower(char s []){           //to change a string into a lowercase string
+    int len=strlen(s);
+    char *str = malloc(len+1);
+    for(int i=0;i<strlen(s);i++)
+           str[i] = tolower(s[i]);
+
+    return str;
+}
+
+//in-order print to see the elements
+void PrintInOrder( struct AVLnode* t){
+    if( t != NULL){
+        PrintInOrder( t->Left );
+        printf("%-30s\t", t->BookName);
+        printf("%-30s\t", t->AuthorName);
+        printf("%-10d\t", t->PublishingDate);
+        printf("%-30s\t", t->PublisherAddress);
+        printf("%-20s\t", t->Category);
+        printf("\n");
+        PrintInOrder( t->Right );
+    }
+}
+
+void printPreOrder(struct AVLnode *t){
+  if (t != NULL) {
+    printf("%-30s\t", t->BookName);
+    printf("%-30s\t", t->AuthorName);
+    printf("%-10d\t", t->PublishingDate);
+    printf("%-30s\t", t->PublisherAddress);
+    printf("%-30s\t", t->Category);
+    printf("\n");
+    printPreOrder(t->Left);
+    printPreOrder(t->Right);
+  }
+}
